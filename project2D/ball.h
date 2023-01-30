@@ -12,13 +12,17 @@ public:
     Ball(std::int16_t radius, Speed initial_speed, Position position);
     ~Ball() = default;
 
-    std::int16_t BALL_RADIUS;
-
-    Position previous_position;
+    std::int16_t radius;
     Position position;
     Speed speed;
 
     void move();
+
+    void reflect_ball_x();
+
+    void reflect_ball_y();
+
+    void reflect_ball();
 };
 
 

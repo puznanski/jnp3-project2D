@@ -1,21 +1,19 @@
 #include "game.h"
 
-#include <random>
 #include <algorithm>
 
 Game::Game() :
-    ball({
+    balls({{
         BALL_RADIUS,
         {0, -BALL_INITIAL_SPEED},
-        {GAME_CANVAS_SIZE / 2, GAME_CANVAS_SIZE - (PADDLE_GAP_BOTTOM + PADDLE_HEIGHT + BALL_GAP_BOTTOM)}}
+        {GAME_CANVAS_SIZE / 2, GAME_CANVAS_SIZE - (PADDLE_GAP_BOTTOM + PADDLE_HEIGHT + BALL_GAP_BOTTOM)}}}
     ), paddle({
         {PADDLE_WIDTH, PADDLE_HEIGHT},
         {(GAME_CANVAS_SIZE - PADDLE_WIDTH) / 2, GAME_CANVAS_SIZE - PADDLE_GAP_BOTTOM}}
-    ) {
-    std::random_device random_device;
-    std::mt19937 engine(random_device());
-    std::uniform_real_distribution<> dist(0, 1);
-
+    ),
+    engine(random_device()),
+    speed_dist(static_cast<std::int16_t>(BALL_INITIAL_SPEED * 0.2), BALL_INITIAL_SPEED),
+    dist(0, 1) {
     std::int16_t y = BOARD_GAP_TOP;
 
     while (y < GAME_CANVAS_SIZE - BOARD_GAP_BOTTOM) {
@@ -25,10 +23,10 @@ Game::Game() :
             auto random = dist(engine);
             BrickType brick_type;
 
-            if (random < UNBREAKABLE_BRICK_PROBABILITY) {
-                brick_type = BrickType::Unbreakable;
+            if (random < UPGRADE_BRICK_PROBABILITY) {
+                brick_type = BrickType::Upgrade;
             }
-            else if (random < UNBREAKABLE_BRICK_PROBABILITY + AWARD_BRICK_PROBABILITY) {
+            else if (random < UPGRADE_BRICK_PROBABILITY + AWARD_BRICK_PROBABILITY) {
                 brick_type = BrickType::Award;
             }
             else {
@@ -48,11 +46,80 @@ bool Game::game_step(D2DSize mouse, bool mouse_pressed, D2DSize window_size, D2D
         is_game_started = mouse_pressed;
     }
     else {
-        ball.move();
-        paddle.move(window_coordinates_to_game_coordinates(window_size, board_start, board_size, board_scale, mouse));
+        paddle.move(window_coordinates_to_game_coordinates(window_size, board_start, board_size, board_scale, mouse), GAME_CANVAS_SIZE);
+
+        for (auto &drop : drops) {
+            drop.move();
+        }
+
+        auto balls_iterator = balls.begin();
+
+        while (balls_iterator != balls.end()) {
+            balls_iterator->move();
+
+            auto bricks_iterator = bricks.begin();
+            bool collided = false;
+
+            while (bricks_iterator != bricks.end()) {
+                if (bricks_iterator->check_collision(balls_iterator->position, balls_iterator->radius)) {
+                    collided = true;
+
+                    if (bricks_iterator->type == BrickType::Upgrade || bricks_iterator->type == BrickType::Award) {
+                        drops.push_back({
+                                {DROP_SIZE, DROP_SIZE},
+                                {bricks_iterator->position.first + bricks_iterator->width / 2, bricks_iterator->position.second + bricks_iterator->height},
+                                bricks_iterator->type == BrickType::Upgrade ? DropType::Arrows : DropType::Star,
+                                {0, DROP_SPEED}}
+                        );
+                    }
+
+                    bricks_iterator = bricks.erase(bricks_iterator);
+                } else {
+                    bricks_iterator++;
+                }
+            }
+
+            collided &= (!check_ball_sides_collision(*balls_iterator));
+            collided &= (!check_ball_paddle_collision(*balls_iterator));
+
+            if (balls_iterator->position.second + BALL_RADIUS > GAME_CANVAS_SIZE) {
+                balls_iterator = balls.erase(balls_iterator);
+            }
+            else if (collided) {
+                balls_iterator->reflect_ball();
+            }
+            else {
+                balls_iterator++;
+            }
+        }
+
+        if (balls.empty()) {
+            lives -= 1;
+            is_game_started = false;
+            drops.erase(drops.begin(), drops.end());
+            paddle.position = {(GAME_CANVAS_SIZE - PADDLE_WIDTH) / 2, GAME_CANVAS_SIZE - PADDLE_GAP_BOTTOM};
+            balls.push_back({
+                BALL_RADIUS,
+                {0, -BALL_INITIAL_SPEED},
+                {GAME_CANVAS_SIZE / 2, GAME_CANVAS_SIZE - (PADDLE_GAP_BOTTOM + PADDLE_HEIGHT + BALL_GAP_BOTTOM)}});
+        }
+        else {
+            auto drops_iterator = drops.begin();
+
+            while (drops_iterator != drops.end()) {
+                if (check_drop_collection(*drops_iterator) || drops_iterator->position.second + DROP_SIZE > GAME_CANVAS_SIZE) {
+                    drops_iterator = drops.erase(drops_iterator);
+                }
+                else {
+                    drops_iterator++;
+                }
+            }
+        }
+
+        won = (lives > 0 && bricks.empty());
     }
 
-    return false;
+    return (bricks.empty() || lives == 0);
 }
 
 std::vector<Brick> Game::get_bricks_to_draw(D2DSize window_size, D2DSize board_start, D2DSize board_scale) {
@@ -73,10 +140,105 @@ Paddle Game::get_paddle_to_draw(D2DSize window_size, D2DSize board_start, D2DSiz
     return {calculated_size, calculated_position};
 }
 
-Ball Game::get_ball_to_draw(D2DSize window_size, D2DSize board_start, D2DSize board_scale) {
+std::vector<Ball> Game::get_balls_to_draw(D2DSize window_size, D2DSize board_start, D2DSize board_scale) {
+    std::vector<Ball> result;
     auto calculated_radius = game_size_to_window_size(window_size, board_scale, {BALL_RADIUS, BALL_RADIUS});
-    auto calculated_position = game_coordinates_to_window_coordinates(window_size, board_start, board_scale, ball.position);
-    return {calculated_radius.first, ball.speed, calculated_position};
+
+    for (const auto &ball : balls) {
+        auto calculated_position = game_coordinates_to_window_coordinates(window_size, board_start, board_scale, ball.position);
+        result.emplace_back(calculated_radius.first, ball.speed, calculated_position);
+    }
+
+    return result;
+}
+
+std::vector<Drop> Game::get_drops_to_draw(D2DSize window_size, D2DSize board_start, D2DSize board_scale) {
+    std::vector<Drop> result;
+    auto calculated_size = game_size_to_window_size(window_size, board_scale, {DROP_SIZE, DROP_SIZE});
+
+    for (const auto &drop : drops) {
+        auto calculated_position = game_coordinates_to_window_coordinates(window_size, board_start, board_scale, drop.position);
+        result.emplace_back(calculated_size, calculated_position, drop.type, drop.speed);
+    }
+
+    return result;
+}
+
+std::int16_t Game::get_lives() const {
+    return lives;
+}
+
+std::int16_t Game::get_max_lives() const {
+    return INITIAL_LIVES;
+}
+
+std::int32_t Game::get_points() const {
+    return points;
+}
+
+bool Game::get_won() const {
+    return won;
+}
+
+bool Game::check_ball_sides_collision(Ball &ball) const {
+    if (ball.position.first - ball.radius < 0 || ball.position.first + ball.radius > GAME_CANVAS_SIZE) {
+        ball.reflect_ball_x();
+        return true;
+    }
+    else if (ball.position.second - ball.radius < 0) {
+        ball.reflect_ball_y();
+        return true;
+    }
+
+    return false;
+}
+
+bool Game::check_ball_paddle_collision(Ball &ball) const {
+    if ((paddle.position.first < ball.position.first + ball.radius) &&
+        (paddle.position.first + paddle.WIDTH > ball.position.first - ball.radius) &&
+        (paddle.position.second < ball.position.second + ball.radius) &&
+        (paddle.position.second + paddle.HEIGHT > ball.position.second - ball.radius)) {
+
+        auto paddle_center = static_cast<float>(paddle.position.first) + static_cast<float>(paddle.WIDTH) / 2.0f;
+        auto ball_distance_from_paddle_center = static_cast<float>(ball.position.first) - paddle_center;
+        ball.speed.first = static_cast<std::int16_t>(ball_distance_from_paddle_center * HORIZONTAL_BALL_SPEED_MULTIPLIER);
+        ball.speed.second *= -1;
+
+        return true;
+    }
+
+    return false;
+}
+
+bool Game::check_drop_collection(Drop &drop) {
+    if ((paddle.position.first < drop.position.first + drop.width / 2) &&
+        (paddle.position.first + paddle.WIDTH > drop.position.first - drop.width / 2) &&
+        (paddle.position.second < drop.position.second + drop.height / 2) &&
+        (paddle.position.second + paddle.HEIGHT > drop.position.second - drop.height / 2)) {
+
+        if (drop.type == DropType::Arrows && balls.size() < BALL_LIMIT) {
+            std::vector<Ball> new_balls;
+
+            for (auto ball : balls) {
+                for (std::int16_t i = 1; i < DROP_BALL_MULTIPLIER; i++) {
+                    new_balls.push_back({
+                        BALL_RADIUS,
+                        {speed_dist(engine) * (dist(engine) >= 0.5 ? 1 : -1), -speed_dist(engine)},
+                        {ball.position.first, ball.position.second}});
+                }
+            }
+
+            balls.reserve(balls.size() + new_balls.size());
+            balls.insert(balls.end(), new_balls.begin(), new_balls.end());
+        }
+        else if (drop.type == DropType::Star) {
+            points += POINTS_MULTIPLIER;
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 Position Game::window_coordinates_to_game_coordinates(D2DSize window_size, D2DSize board_start, D2DSize board_size, D2DSize board_scale, D2DSize position) const {

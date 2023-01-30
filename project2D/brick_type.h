@@ -3,7 +3,7 @@
 
 enum class BrickType {
     Normal,
-    Unbreakable,
+    Upgrade,
     Award
 };
 

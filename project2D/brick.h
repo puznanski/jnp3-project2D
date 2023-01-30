@@ -14,11 +14,12 @@ public:
     Brick(Size size, Position position, BrickType type);
     ~Brick() = default;
 
-    const std::int16_t BRICK_WIDTH;
-    const std::int16_t BRICK_HEIGHT;
-
+    std::int16_t width;
+    std::int16_t height;
     Position position;
     BrickType type;
+
+    [[nodiscard]] bool check_collision(Position ball_position, std::int16_t ball_radius) const;
 };
 
 

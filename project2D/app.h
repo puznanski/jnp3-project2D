@@ -4,6 +4,7 @@
 
 #include <windows.h>
 #include <d2d1_3.h>
+#include <dwrite_3.h>
 #include "game.h"
 
 using D2DSize = std::pair<float, float>;
@@ -36,13 +37,24 @@ private:
     const FLOAT WINDOW_HEIGHT = 600;
     const FLOAT WINDOW_WIDTH = 600;
     const FLOAT BOARD_SCALE = 0.7;
+    const INT CHARACTERS_IN_POINTS_TEXT = 7;
 
     HWND hwnd;
     ID2D1Factory *direct2d_factory;
     ID2D1HwndRenderTarget *direct2d_render_target;
+    IDWriteFactory *write_factory;
+
     ID2D1SolidColorBrush *main_brush;
+    ID2D1SolidColorBrush *board_background_brush;
     ID2D1SolidColorBrush *brush1;
     ID2D1SolidColorBrush *brush2;
+
+    ID2D1LinearGradientBrush* background_gradient_brush;
+    ID2D1RadialGradientBrush* arrows_gradient_brush;
+    ID2D1RadialGradientBrush* star_gradient_brush;
+    ID2D1RadialGradientBrush* heart_gradient_brush;
+
+    IDWriteTextFormat *text_format;
 
     HRESULT CreateDeviceIndependentResources();
 
@@ -72,9 +84,9 @@ private:
     D2DSize simulation_step_board_start;
     D2DSize simulation_step_board_size;
     D2DSize simulation_step_board_scale;
+    FLOAT simulation_step_visual_gap;
 
-
-    Game game;
+    Game* game;
 
     void update_simulation_step_sizes();
 
@@ -82,7 +94,25 @@ private:
 
     void draw_paddle();
 
-    void draw_ball();
+    void draw_balls();
+
+    void draw_drops();
+
+    void draw_lives();
+
+    void draw_points();
+
+    void draw_arrows(ID2D1PathGeometry* path, D2DSize position, D2DSize size);
+
+    void draw_star(ID2D1PathGeometry* path, D2DSize position, D2DSize size);
+
+    void draw_heart(ID2D1PathGeometry* path, D2DSize position, D2DSize size);
+
+    ID2D1PathGeometry* create_arrows();
+
+    ID2D1PathGeometry* create_star();
+
+    ID2D1PathGeometry* create_heart();
 
     static constexpr D2D1_COLOR_F background_color =
             {.r = 0.0f, .g = 0.0f, .b = 0.0f, .a = 1.0f};

@@ -17,7 +17,7 @@ public:
 
     Position position;
 
-    void move(Position mouse_position);
+    void move(Position mouse_position, std::int16_t board_size);
 };
 
 
