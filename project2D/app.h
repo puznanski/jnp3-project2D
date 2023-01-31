@@ -43,6 +43,7 @@ private:
     ID2D1Factory *direct2d_factory;
     ID2D1HwndRenderTarget *direct2d_render_target;
     IDWriteFactory *write_factory;
+    IWICImagingFactory *wic_factory;
 
     ID2D1SolidColorBrush *main_brush;
     ID2D1SolidColorBrush *board_background_brush;
@@ -55,6 +56,12 @@ private:
     ID2D1RadialGradientBrush* heart_gradient_brush;
 
     IDWriteTextFormat *text_format;
+
+    ID2D1Bitmap *board_bitmap;
+    ID2D1Bitmap *normal_brick_bitmap;
+    ID2D1Bitmap *upgrade_brick_bitmap;
+    ID2D1Bitmap *award_brick_bitmap;
+    ID2D1Bitmap *paddle_bitmap;
 
     HRESULT CreateDeviceIndependentResources();
 
@@ -75,6 +82,8 @@ private:
             WPARAM wParam,
             LPARAM lParam
     );
+
+    HRESULT LoadBitmapFromFile(PCWSTR uri, ID2D1Bitmap **bitmap);
 
     INT mouse_x = 0;
     INT mouse_y = 0;

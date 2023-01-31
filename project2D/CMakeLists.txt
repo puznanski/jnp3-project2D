@@ -3,7 +3,6 @@ cmake_minimum_required (VERSION 3.8)
 # Dodaj źródło do pliku wykonywalnego tego projektu.
 add_executable (project2D
         "app.cpp" "app.h"
-        "bitmap.cpp" "bitmap.h"
         "game.cpp" "game.h"
         "paddle.cpp" "paddle.h"
         "ball.cpp" "ball.h"
@@ -33,3 +32,12 @@ endif ()
 
 # Dołączenie biblioteki DirectWrite
 target_link_libraries(project2D ${DIRECT_WRITE})
+
+# Szukanie biblioteki WindowsCodecs (windowscodecs.lib)
+find_library(WINDOWS_CODECS windowscodecs)
+if (NOT WINDOWS_CODECS)
+    message(FATAL_ERROR "Could not find WindowsCodecs.")
+endif ()
+
+# Dołączenie biblioteki WindowsCodecs
+target_link_libraries(project2D ${WINDOWS_CODECS})

@@ -48,10 +48,10 @@ public:
 private:
     const std::int16_t INITIAL_LIVES = 3;
     const std::int16_t GAME_CANVAS_SIZE = 1000;
-    const std::int16_t BALL_RADIUS = 8;
+    const std::int16_t BALL_RADIUS = 9;
     const std::int16_t BALL_INITIAL_SPEED = 10;
     const std::int16_t BALL_GAP_BOTTOM = 50;
-    const std::int16_t PADDLE_WIDTH = 100;
+    const std::int16_t PADDLE_WIDTH = 120;
     const std::int16_t PADDLE_HEIGHT = 15;
     const std::int16_t PADDLE_GAP_BOTTOM = 50;
     const std::int16_t BRICK_WIDTH = 40;

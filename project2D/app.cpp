@@ -8,6 +8,7 @@
 #include <windowsx.h>
 #include <numbers>
 #include <string>
+#include <wincodec.h>
 
 
 INT WINAPI wWinMain(_In_ [[maybe_unused]] HINSTANCE instance,
@@ -101,7 +102,22 @@ App::App() :
         hwnd(nullptr),
         direct2d_factory(nullptr),
         direct2d_render_target(nullptr),
-        main_brush(nullptr) {
+        write_factory(nullptr),
+        wic_factory(nullptr),
+        main_brush(nullptr),
+        board_background_brush(nullptr),
+        brush1(nullptr),
+        brush2(nullptr),
+        background_gradient_brush(nullptr),
+        arrows_gradient_brush(nullptr),
+        star_gradient_brush(nullptr),
+        heart_gradient_brush(nullptr),
+        text_format(nullptr),
+        board_bitmap(nullptr),
+        normal_brick_bitmap(nullptr),
+        upgrade_brick_bitmap(nullptr),
+        award_brick_bitmap(nullptr),
+        paddle_bitmap(nullptr) {
     game = new Game();
 }
 
@@ -109,6 +125,7 @@ App::~App() {
     SafeRelease(&direct2d_factory);
     SafeRelease(&direct2d_render_target);
     SafeRelease(&write_factory);
+    SafeRelease(&wic_factory);
     delete game;
 }
 
@@ -254,16 +271,25 @@ HRESULT App::CreateDeviceResources() {
         }
 
         ID2D1GradientStopCollection* background_gradient_stops = nullptr;
-        UINT const NUM_BACKGROUND_GRADIENT_STOPS = 3;
+        UINT const NUM_BACKGROUND_GRADIENT_STOPS = 2;
         D2D1_GRADIENT_STOP background_gradient_stops_data[NUM_BACKGROUND_GRADIENT_STOPS];
 
-        if (SUCCEEDED(hr)) {
+        /*if (SUCCEEDED(hr)) {
             background_gradient_stops_data[0] =
                     { .position = 0.0f, .color = ColorF(0.39f, 0.69f, 0.83f, 1.0f) };
             background_gradient_stops_data[1] =
                     { .position = 0.4f, .color = ColorF(0.15f, 0.28f, 0.45f, 1.0f) };
             background_gradient_stops_data[2] =
                     { .position = 1.0f, .color = ColorF(0.06f, 0.04f, 0.22f, 1.0f) };
+            hr = direct2d_render_target->CreateGradientStopCollection(
+                    background_gradient_stops_data, NUM_BACKGROUND_GRADIENT_STOPS, &background_gradient_stops);
+        }*/
+
+        if (SUCCEEDED(hr)) {
+            background_gradient_stops_data[0] =
+                    { .position = 0.0f, .color = ColorF(0.29f, 0.29f, 0.29f, 1.0f) };
+            background_gradient_stops_data[1] =
+                    { .position = 1.0f, .color = ColorF(0.0f, 0.0f, 0.0f, 1.0f) };
             hr = direct2d_render_target->CreateGradientStopCollection(
                     background_gradient_stops_data, NUM_BACKGROUND_GRADIENT_STOPS, &background_gradient_stops);
         }
@@ -354,6 +380,26 @@ HRESULT App::CreateDeviceResources() {
                     &text_format
             );
         }
+
+        if (SUCCEEDED(hr)) {
+            hr = LoadBitmapFromFile(L"assets\\board.png", &board_bitmap);
+        }
+
+        if (SUCCEEDED(hr)) {
+            hr = LoadBitmapFromFile(L"assets\\brick.png", &normal_brick_bitmap);
+        }
+
+        if (SUCCEEDED(hr)) {
+            hr = LoadBitmapFromFile(L"assets\\brick1.png", &upgrade_brick_bitmap);
+        }
+
+        if (SUCCEEDED(hr)) {
+            hr = LoadBitmapFromFile(L"assets\\brick2.png", &award_brick_bitmap);
+        }
+
+        if (SUCCEEDED(hr)) {
+            hr = LoadBitmapFromFile(L"assets\\paddle.png", &paddle_bitmap);
+        }
     }
 
     return hr;
@@ -370,6 +416,11 @@ void App::DiscardDeviceResources() {
     SafeRelease(&star_gradient_brush);
     SafeRelease(&heart_gradient_brush);
     SafeRelease(&text_format);
+    SafeRelease(&board_bitmap);
+    SafeRelease(&normal_brick_bitmap);
+    SafeRelease(&upgrade_brick_bitmap);
+    SafeRelease(&award_brick_bitmap);
+    SafeRelease(&paddle_bitmap);
 }
 
 HRESULT App::OnRender() {
@@ -388,7 +439,7 @@ HRESULT App::OnRender() {
                 simulation_step_window_size.second
         );
 
-        direct2d_render_target->FillRectangle(background, background_gradient_brush);
+        //direct2d_render_target->FillRectangle(background, background_gradient_brush);
 
         auto board_border = D2D1::RectF(
                 simulation_step_board_start.first,
@@ -397,8 +448,15 @@ HRESULT App::OnRender() {
                 simulation_step_board_start.second + simulation_step_board_size.second
         );
 
-        direct2d_render_target->FillRectangle(board_border, board_background_brush);
-        direct2d_render_target->DrawRectangle(board_border, main_brush);
+        direct2d_render_target->DrawBitmap(
+                board_bitmap,
+                board_border,
+                1.0f,
+                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
+        );
+
+        //direct2d_render_target->FillRectangle(board_border, board_background_brush);
+        //direct2d_render_target->DrawRectangle(board_border, main_brush);
 
         draw_bricks();
         draw_paddle();
@@ -445,6 +503,76 @@ HRESULT App::CreateDeviceIndependentResources() {
         );
     }
 
+    // Create a WIC factory.
+    if (SUCCEEDED(hr)) {
+        hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    }
+
+    if (SUCCEEDED(hr)) {
+        hr = CoCreateInstance(
+                CLSID_WICImagingFactory,
+                nullptr,
+                CLSCTX_INPROC_SERVER,
+                __uuidof(IWICImagingFactory),
+                reinterpret_cast<LPVOID*>(&wic_factory)
+        );
+    }
+
+    return hr;
+}
+
+HRESULT App::LoadBitmapFromFile(PCWSTR uri, ID2D1Bitmap **bitmap) {
+    IWICBitmapDecoder *decoder = NULL;
+    IWICBitmapFrameDecode *source = NULL;
+    IWICStream *stream = NULL;
+    IWICFormatConverter *converter = NULL;
+    IWICBitmapScaler *scaler = NULL;
+
+    HRESULT hr = wic_factory->CreateDecoderFromFilename(
+            uri,
+            NULL,
+            GENERIC_READ,
+            WICDecodeMetadataCacheOnLoad,
+            &decoder
+    );
+
+    if (SUCCEEDED(hr)) {
+        // Create the initial frame.
+        hr = decoder->GetFrame(0, &source);
+    }
+
+    if (SUCCEEDED(hr)) {
+        // Convert the image format to 32bppPBGRA
+        // (DXGI_FORMAT_B8G8R8A8_UNORM + D2D1_ALPHA_MODE_PREMULTIPLIED).
+        hr = wic_factory->CreateFormatConverter(&converter);
+    }
+
+    if (SUCCEEDED(hr)) {
+        hr = converter->Initialize(
+                source,
+                GUID_WICPixelFormat32bppPBGRA,
+                WICBitmapDitherTypeNone,
+                NULL,
+                0.f,
+                WICBitmapPaletteTypeMedianCut
+        );
+    }
+
+    if (SUCCEEDED(hr)) {
+        // Create a Direct2D bitmap from the WIC bitmap.
+        hr = direct2d_render_target->CreateBitmapFromWicBitmap(
+                converter,
+                NULL,
+                bitmap
+        );
+    }
+
+    SafeRelease(&decoder);
+    SafeRelease(&source);
+    SafeRelease(&stream);
+    SafeRelease(&converter);
+    SafeRelease(&scaler);
+
     return hr;
 }
 
@@ -481,13 +609,31 @@ void App::draw_bricks() {
         );
 
         if (brick.type == BrickType::Upgrade) {
-            direct2d_render_target->FillRectangle(brick_rect, brush1);
+            //direct2d_render_target->FillRectangle(brick_rect, brush1);
+            direct2d_render_target->DrawBitmap(
+                    upgrade_brick_bitmap,
+                    brick_rect,
+                    1.0f,
+                    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
+            );
         }
         else if (brick.type == BrickType::Award) {
-            direct2d_render_target->FillRectangle(brick_rect, brush2);
+            //direct2d_render_target->FillRectangle(brick_rect, brush2);
+            direct2d_render_target->DrawBitmap(
+                    award_brick_bitmap,
+                    brick_rect,
+                    1.0f,
+                    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
+            );
         }
         else {
-            direct2d_render_target->FillRectangle(brick_rect, main_brush);
+            //direct2d_render_target->FillRectangle(brick_rect, main_brush);
+            direct2d_render_target->DrawBitmap(
+                    normal_brick_bitmap,
+                    brick_rect,
+                    1.0f,
+                    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
+            );
         }
     }
 }
@@ -502,7 +648,13 @@ void App::draw_paddle() {
             paddle.position.second + paddle.HEIGHT
     );
 
-    direct2d_render_target->FillRectangle(paddle_rect, main_brush);
+    //direct2d_render_target->FillRectangle(paddle_rect, main_brush);
+    direct2d_render_target->DrawBitmap(
+            paddle_bitmap,
+            paddle_rect,
+            1.0f,
+            D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
+    );
 }
 
 void App::draw_balls() {
@@ -516,6 +668,7 @@ void App::draw_balls() {
         );
 
         direct2d_render_target->FillEllipse(ball_ellipse, main_brush);
+        direct2d_render_target->DrawEllipse(ball_ellipse, board_background_brush);
     }
 }
 
@@ -591,9 +744,10 @@ void App::draw_points() {
             text_format,
             D2D1::RectF(
                     0.0f, 0.0f,
-                    500.0f, 500.0f
+                    simulation_step_window_size.first,
+                    simulation_step_window_size.second
             ),
-            board_background_brush
+            main_brush
     );
     direct2d_render_target->SetTransform(D2D1::Matrix3x2F::Identity());
 }
