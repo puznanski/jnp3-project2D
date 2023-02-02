@@ -1,9 +1,9 @@
 #include "app.h"
 
-#include <stdlib.h>
+#include <cstdlib>
 #include <malloc.h>
 #include <memory.h>
-#include <wchar.h>
+#include <cwchar>
 #include <cmath>
 #include <windowsx.h>
 #include <numbers>
@@ -106,12 +106,12 @@ App::App() :
         wic_factory(nullptr),
         main_brush(nullptr),
         board_background_brush(nullptr),
-        brush1(nullptr),
-        brush2(nullptr),
-        background_gradient_brush(nullptr),
         arrows_gradient_brush(nullptr),
         star_gradient_brush(nullptr),
         heart_gradient_brush(nullptr),
+        arrows_path(nullptr),
+        star_path(nullptr),
+        heart_path(nullptr),
         text_format(nullptr),
         board_bitmap(nullptr),
         normal_brick_bitmap(nullptr),
@@ -146,7 +146,7 @@ void App::RunMessageLoop() {
                                           simulation_step_board_start, simulation_step_board_size,
                                           simulation_step_board_scale);
 
-            if (result && (!game->get_won())) {
+            if ((result && (!game->get_won())) || (game->get_won() && mouse_pressed)) {
                 delete game;
                 game = new Game();
             }
@@ -254,54 +254,6 @@ HRESULT App::CreateDeviceResources() {
             );
         }
 
-        if (SUCCEEDED(hr)) {
-            // Create brush 1.
-            hr = direct2d_render_target->CreateSolidColorBrush(
-                    color1,
-                    &brush1
-            );
-        }
-
-        if (SUCCEEDED(hr)) {
-            // Create brush 2.
-            hr = direct2d_render_target->CreateSolidColorBrush(
-                    color2,
-                    &brush2
-            );
-        }
-
-        ID2D1GradientStopCollection* background_gradient_stops = nullptr;
-        UINT const NUM_BACKGROUND_GRADIENT_STOPS = 2;
-        D2D1_GRADIENT_STOP background_gradient_stops_data[NUM_BACKGROUND_GRADIENT_STOPS];
-
-        /*if (SUCCEEDED(hr)) {
-            background_gradient_stops_data[0] =
-                    { .position = 0.0f, .color = ColorF(0.39f, 0.69f, 0.83f, 1.0f) };
-            background_gradient_stops_data[1] =
-                    { .position = 0.4f, .color = ColorF(0.15f, 0.28f, 0.45f, 1.0f) };
-            background_gradient_stops_data[2] =
-                    { .position = 1.0f, .color = ColorF(0.06f, 0.04f, 0.22f, 1.0f) };
-            hr = direct2d_render_target->CreateGradientStopCollection(
-                    background_gradient_stops_data, NUM_BACKGROUND_GRADIENT_STOPS, &background_gradient_stops);
-        }*/
-
-        if (SUCCEEDED(hr)) {
-            background_gradient_stops_data[0] =
-                    { .position = 0.0f, .color = ColorF(0.29f, 0.29f, 0.29f, 1.0f) };
-            background_gradient_stops_data[1] =
-                    { .position = 1.0f, .color = ColorF(0.0f, 0.0f, 0.0f, 1.0f) };
-            hr = direct2d_render_target->CreateGradientStopCollection(
-                    background_gradient_stops_data, NUM_BACKGROUND_GRADIENT_STOPS, &background_gradient_stops);
-        }
-
-        if (SUCCEEDED(hr)) {
-            hr = direct2d_render_target->CreateLinearGradientBrush(
-                    D2D1::LinearGradientBrushProperties(
-                            Point2F(0, 0),
-                            Point2F(0, WINDOW_HEIGHT)),
-                    background_gradient_stops, &background_gradient_brush);
-        }
-
         ID2D1GradientStopCollection* arrows_gradient_stops = nullptr;
         UINT const NUM_ARROWS_GRADIENT_STOPS = 2;
         D2D1_GRADIENT_STOP arrows_gradient_stops_data[NUM_ARROWS_GRADIENT_STOPS];
@@ -400,6 +352,10 @@ HRESULT App::CreateDeviceResources() {
         if (SUCCEEDED(hr)) {
             hr = LoadBitmapFromFile(L"assets\\paddle.png", &paddle_bitmap);
         }
+
+        arrows_path = create_arrows();
+        heart_path = create_heart();
+        star_path = create_star();
     }
 
     return hr;
@@ -409,12 +365,12 @@ void App::DiscardDeviceResources() {
     SafeRelease(&direct2d_render_target);
     SafeRelease(&main_brush);
     SafeRelease(&board_background_brush);
-    SafeRelease(&brush1);
-    SafeRelease(&brush2);
-    SafeRelease(&background_gradient_brush);
     SafeRelease(&arrows_gradient_brush);
     SafeRelease(&star_gradient_brush);
     SafeRelease(&heart_gradient_brush);
+    SafeRelease(&arrows_path);
+    SafeRelease(&star_path);
+    SafeRelease(&heart_path);
     SafeRelease(&text_format);
     SafeRelease(&board_bitmap);
     SafeRelease(&normal_brick_bitmap);
@@ -432,15 +388,6 @@ HRESULT App::OnRender() {
         direct2d_render_target->BeginDraw();
         direct2d_render_target->Clear(background_color);
 
-        auto background = D2D1::RectF(
-                0,
-                0,
-                simulation_step_window_size.first,
-                simulation_step_window_size.second
-        );
-
-        //direct2d_render_target->FillRectangle(background, background_gradient_brush);
-
         auto board_border = D2D1::RectF(
                 simulation_step_board_start.first,
                 simulation_step_board_start.second,
@@ -454,9 +401,6 @@ HRESULT App::OnRender() {
                 1.0f,
                 D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
         );
-
-        //direct2d_render_target->FillRectangle(board_border, board_background_brush);
-        //direct2d_render_target->DrawRectangle(board_border, main_brush);
 
         draw_bricks();
         draw_paddle();
@@ -609,7 +553,6 @@ void App::draw_bricks() {
         );
 
         if (brick.type == BrickType::Upgrade) {
-            //direct2d_render_target->FillRectangle(brick_rect, brush1);
             direct2d_render_target->DrawBitmap(
                     upgrade_brick_bitmap,
                     brick_rect,
@@ -618,7 +561,6 @@ void App::draw_bricks() {
             );
         }
         else if (brick.type == BrickType::Award) {
-            //direct2d_render_target->FillRectangle(brick_rect, brush2);
             direct2d_render_target->DrawBitmap(
                     award_brick_bitmap,
                     brick_rect,
@@ -627,7 +569,6 @@ void App::draw_bricks() {
             );
         }
         else {
-            //direct2d_render_target->FillRectangle(brick_rect, main_brush);
             direct2d_render_target->DrawBitmap(
                     normal_brick_bitmap,
                     brick_rect,
@@ -648,7 +589,6 @@ void App::draw_paddle() {
             paddle.position.second + paddle.HEIGHT
     );
 
-    //direct2d_render_target->FillRectangle(paddle_rect, main_brush);
     direct2d_render_target->DrawBitmap(
             paddle_bitmap,
             paddle_rect,
@@ -759,7 +699,6 @@ void App::draw_arrows(ID2D1PathGeometry* path, D2DSize position, D2DSize size) {
 
     direct2d_render_target->SetTransform(transformation);
     direct2d_render_target->FillGeometry(path, arrows_gradient_brush);
-    //direct2d_render_target->DrawGeometry(path, main_brush);
     direct2d_render_target->SetTransform(D2D1::Matrix3x2F::Identity());
 }
 

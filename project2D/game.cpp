@@ -181,16 +181,18 @@ bool Game::get_won() const {
 }
 
 bool Game::check_ball_sides_collision(Ball &ball) const {
+    bool result = false;
+
     if (ball.position.first - ball.radius < 0 || ball.position.first + ball.radius > GAME_CANVAS_SIZE) {
         ball.reflect_ball_x();
-        return true;
+        result = true;
     }
-    else if (ball.position.second - ball.radius < 0) {
+    if (ball.position.second - ball.radius < 0) {
         ball.reflect_ball_y();
-        return true;
+        result = true;
     }
 
-    return false;
+    return result;
 }
 
 bool Game::check_ball_paddle_collision(Ball &ball) const {

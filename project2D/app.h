@@ -47,13 +47,14 @@ private:
 
     ID2D1SolidColorBrush *main_brush;
     ID2D1SolidColorBrush *board_background_brush;
-    ID2D1SolidColorBrush *brush1;
-    ID2D1SolidColorBrush *brush2;
 
-    ID2D1LinearGradientBrush* background_gradient_brush;
     ID2D1RadialGradientBrush* arrows_gradient_brush;
     ID2D1RadialGradientBrush* star_gradient_brush;
     ID2D1RadialGradientBrush* heart_gradient_brush;
+
+    ID2D1PathGeometry* arrows_path;
+    ID2D1PathGeometry* star_path;
+    ID2D1PathGeometry* heart_path;
 
     IDWriteTextFormat *text_format;
 
@@ -127,9 +128,4 @@ private:
             {.r = 0.0f, .g = 0.0f, .b = 0.0f, .a = 1.0f};
     static constexpr D2D1_COLOR_F brush_color =
             {.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 1.0f};
-    static constexpr D2D1_COLOR_F color1 =
-            {.r = 1.0f, .g = 0.0f, .b = 1.0f, .a = 1.0f};
-    static constexpr D2D1_COLOR_F color2 =
-            {.r = 1.0f, .g = 1.0f, .b = 0.0f, .a = 1.0f};
-
 };
